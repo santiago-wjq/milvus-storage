@@ -17,7 +17,7 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
           flake8 milvus_storage/ --max-line-length=100 --ignore=E203,W503
 
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11']

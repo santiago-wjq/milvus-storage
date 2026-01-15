@@ -32,7 +32,7 @@ env:
 jobs:
   # Build wheel for Linux x86_64
   build-linux-x86_64:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -259,7 +259,7 @@ jobs:
 
   # Build source distribution
   build-sdist:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -304,9 +304,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
             artifact: wheel-linux-x86_64
-          - os: ubuntu-24.04-arm64
+          - os: ubuntu-22.04
             artifact: wheel-linux-arm64
           - os: macos-14
             artifact: wheel-macos-arm64
@@ -346,7 +346,7 @@ jobs:
       (needs.build-linux-x86_64.result == 'success') &&
       (needs.build-sdist.result == 'success') &&
       (needs.test-wheels.result == 'success' || github.event.inputs.skip_tests == 'true')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target || 'pypi' }}
       url: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'testpypi' && 'https://test.pypi.org/project/milvus-storage/' || 'https://pypi.org/project/milvus-storage/' }}

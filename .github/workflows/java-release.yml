@@ -33,7 +33,7 @@ env:
 jobs:
   # Build for Linux x86_64
   build-linux-x86_64:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -180,7 +180,7 @@ jobs:
   # Package and test
   package:
     needs: [build-linux-x86_64, build-linux-arm64, build-macos-arm64]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -254,7 +254,7 @@ jobs:
       (github.event_name == 'push' ||
        github.event.inputs.publish_target == 'github' ||
        github.event.inputs.publish_target == 'both')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       packages: write
@@ -303,7 +303,7 @@ jobs:
       needs.package.result == 'success' &&
       (github.event.inputs.publish_target == 'maven-central' ||
        github.event.inputs.publish_target == 'both')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -354,7 +354,7 @@ jobs:
     if: |
       always() &&
       needs.package.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
