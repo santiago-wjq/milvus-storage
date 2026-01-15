@@ -57,8 +57,9 @@ jobs:
           ccache --set-config=max_size=2G
           ccache --set-config=compression=true
           ccache -z
-          echo "CC=ccache gcc" >> $GITHUB_ENV
-          echo "CXX=ccache g++" >> $GITHUB_ENV
+          # Use cmake launcher variables instead of CC/CXX to avoid breaking Rust builds
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
       - name: Setup JDK
         uses: actions/setup-java@v4
