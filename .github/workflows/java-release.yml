@@ -73,8 +73,18 @@ jobs:
       - name: Prepare native libraries
         run: |
           mkdir -p java/native/linux-x86_64
-          cp cpp/build/Release/lib/libmilvus-storage-jni.so java/native/linux-x86_64/
-          cp cpp/build/Release/lib/libmilvus-storage.so java/native/linux-x86_64/
+          # Find and copy libraries (they may be in different locations)
+          JNI_LIB=$(find cpp/build -name "libmilvus-storage-jni.so" -type f | head -1)
+          MAIN_LIB=$(find cpp/build -name "libmilvus-storage.so" -type f | head -1)
+          if [ -z "$JNI_LIB" ] || [ -z "$MAIN_LIB" ]; then
+            echo "ERROR: Libraries not found!"
+            find cpp/build -name "*.so" -type f
+            exit 1
+          fi
+          echo "Found JNI library at: $JNI_LIB"
+          echo "Found main library at: $MAIN_LIB"
+          cp "$JNI_LIB" java/native/linux-x86_64/
+          cp "$MAIN_LIB" java/native/linux-x86_64/
 
       - name: Upload native library
         uses: actions/upload-artifact@v4

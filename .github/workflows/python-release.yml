@@ -68,7 +68,15 @@ jobs:
       - name: Copy shared library to Python package
         run: |
           mkdir -p python/milvus_storage/lib
-          cp cpp/build/Release/lib/libmilvus-storage.so python/milvus_storage/lib/
+          # Find and copy the library (it may be in different locations depending on conan version)
+          LIBPATH=$(find cpp/build -name "libmilvus-storage.so" -type f | head -1)
+          if [ -z "$LIBPATH" ]; then
+            echo "ERROR: libmilvus-storage.so not found!"
+            find cpp/build -name "*.so" -type f
+            exit 1
+          fi
+          echo "Found library at: $LIBPATH"
+          cp "$LIBPATH" python/milvus_storage/lib/
 
       - name: Set version
         working-directory: ./python
