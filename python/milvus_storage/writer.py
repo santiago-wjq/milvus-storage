@@ -2,14 +2,14 @@
 Writer class for milvus-storage.
 """
 
-from typing import Optional, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional
 
 if TYPE_CHECKING:
     import pyarrow as pa  # type: ignore
 
-from ._ffi import get_library, get_ffi, check_result
-from .properties import Properties
+from ._ffi import check_result, get_ffi, get_library
 from .exceptions import InvalidArgumentError, ResourceError
+from .properties import Properties
 
 
 class Writer:
@@ -36,12 +36,7 @@ class Writer:
         ...     manifest = writer.close()
     """
 
-    def __init__(
-        self,
-        path: str,
-        schema: "pa.Schema",
-        properties: Optional[Dict[str, str]] = None
-    ):
+    def __init__(self, path: str, schema: "pa.Schema", properties: Optional[Dict[str, str]] = None):
         """
         Initialize a new Writer.
 
@@ -81,10 +76,7 @@ class Writer:
         # Create writer
         handle = self._ffi.new("WriterHandle*")
         result = self._lib.writer_new(
-            path.encode('utf-8'),
-            c_schema,
-            self._props._get_c_properties(),
-            handle
+            path.encode("utf-8"), c_schema, self._props._get_c_properties(), handle
         )
         check_result(result)
 
@@ -108,6 +100,7 @@ class Writer:
             raise ResourceError("Writer is closed")
 
         import pyarrow as pa  # type: ignore
+
         if not isinstance(batch, pa.RecordBatch):
             raise InvalidArgumentError(
                 f"batch must be a pyarrow.RecordBatch, got {type(batch).__name__}"
@@ -165,14 +158,11 @@ class Writer:
 
         column_groups_ptr = self._ffi.new("char**")
 
-        result = self._lib.writer_close(
-            self._handle,
-            column_groups_ptr
-        )
+        result = self._lib.writer_close(self._handle, column_groups_ptr)
         check_result(result)
 
         # Copy column groups to Python string
-        column_groups = self._ffi.string(column_groups_ptr[0]).decode('utf-8')
+        column_groups = self._ffi.string(column_groups_ptr[0]).decode("utf-8")
 
         # Free C string
         self._lib.free_cstr(column_groups_ptr[0])

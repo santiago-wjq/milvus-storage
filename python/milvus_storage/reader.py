@@ -2,15 +2,16 @@
 Reader classes for milvus-storage.
 """
 
-from typing import Optional, List, Dict, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
+
 import numpy as np
 
 if TYPE_CHECKING:
     import pyarrow as pa  # type: ignore
 
-from ._ffi import get_library, get_ffi, check_result
-from .properties import Properties
+from ._ffi import check_result, get_ffi, get_library
 from .exceptions import InvalidArgumentError, ResourceError
+from .properties import Properties
 
 
 class ChunkReader:
@@ -62,21 +63,16 @@ class ChunkReader:
 
         # Allocate Arrow C Data Interface structure using milvus-storage FFI
         c_array = self._ffi.new("struct ArrowArray*")
-        result = self._lib.get_chunk(
-            self._handle,
-            index,
-            c_array
-        )
+        result = self._lib.get_chunk(self._handle, index, c_array)
         check_result(result)
 
         # Import to PyArrow
         import pyarrow as pa  # type: ignore
+
         return pa.RecordBatch._import_from_c(int(self._ffi.cast("uintptr_t", c_array)))
 
     def get_chunks(
-        self,
-        indices: Union[List[int], np.ndarray],
-        parallelism: int = 1
+        self, indices: Union[List[int], np.ndarray], parallelism: int = 1
     ) -> List["pa.RecordBatch"]:
         """
         Retrieve multiple chunks by their indices.
@@ -116,17 +112,22 @@ class ChunkReader:
             len(indices_array),
             parallelism,
             arrays_ptr_holder,
-            num_arrays
+            num_arrays,
         )
         check_result(result)
 
         # Import arrays to PyArrow
         import pyarrow as pa  # type: ignore
+
         batches = []
         arrays_ptr = arrays_ptr_holder[0]
         for i in range(num_arrays[0]):
             # Get pointer to the i-th ArrowArray in the array
-            array_ptr = self._ffi.cast("struct ArrowArray*", int(self._ffi.cast("uintptr_t", arrays_ptr)) + i * self._ffi.sizeof("struct ArrowArray"))
+            array_ptr = self._ffi.cast(
+                "struct ArrowArray*",
+                int(self._ffi.cast("uintptr_t", arrays_ptr))
+                + i * self._ffi.sizeof("struct ArrowArray"),
+            )
             batch = pa.RecordBatch._import_from_c(int(self._ffi.cast("uintptr_t", array_ptr)))
             batches.append(batch)
 
@@ -164,14 +165,14 @@ class ChunkReader:
             self._ffi.cast("int64_t*", row_indices_ptr),
             len(row_indices_array),
             chunk_indices_ptr,
-            num_chunks
+            num_chunks,
         )
         check_result(result)
 
         # Copy to numpy array
         chunk_indices = np.frombuffer(
             self._ffi.buffer(chunk_indices_ptr[0], num_chunks[0] * self._ffi.sizeof("int64_t")),
-            dtype=np.int64
+            dtype=np.int64,
         ).copy()
 
         # Free C array
@@ -229,7 +230,7 @@ class Reader:
         column_groups: str,
         schema: "pa.Schema",
         columns: Optional[List[str]] = None,
-        properties: Optional[Dict[str, str]] = None
+        properties: Optional[Dict[str, str]] = None,
     ):
         """
         Initialize a new Reader.
@@ -270,7 +271,7 @@ class Reader:
         # Prepare columns array
         if columns:
             # Create cdata pointers for each column name
-            columns_cdata = [self._ffi.new("char[]", c.encode('utf-8')) for c in columns]
+            columns_cdata = [self._ffi.new("char[]", c.encode("utf-8")) for c in columns]
             columns_array = self._ffi.new("char*[]", columns_cdata)
             num_columns = len(columns)
         else:
@@ -280,12 +281,12 @@ class Reader:
         # Create reader
         handle = self._ffi.new("ReaderHandle*")
         result = self._lib.reader_new(
-            column_groups.encode('utf-8'),
+            column_groups.encode("utf-8"),
             c_schema,
             columns_array,
             num_columns,
             self._props._get_c_properties(),
-            handle
+            handle,
         )
         check_result(result)
 
@@ -315,24 +316,17 @@ class Reader:
         # Allocate Arrow C Data Interface structure using milvus-storage FFI
         c_stream = self._ffi.new("struct ArrowArrayStream*")
 
-        predicate_bytes = predicate.encode('utf-8') if predicate else self._ffi.NULL
+        predicate_bytes = predicate.encode("utf-8") if predicate else self._ffi.NULL
 
-        result = self._lib.get_record_batch_reader(
-            self._handle,
-            predicate_bytes,
-            c_stream
-        )
+        result = self._lib.get_record_batch_reader(self._handle, predicate_bytes, c_stream)
         check_result(result)
 
         # Import to PyArrow
         import pyarrow as pa  # type: ignore
+
         return pa.RecordBatchReader._import_from_c(int(self._ffi.cast("uintptr_t", c_stream)))
 
-    def take(
-        self,
-        indices: Union[List[int], np.ndarray],
-        parallelism: int = 1
-    ) -> "pa.RecordBatch":
+    def take(self, indices: Union[List[int], np.ndarray], parallelism: int = 1) -> "pa.RecordBatch":
         """
         Extract specific rows by their global indices.
 
@@ -373,12 +367,13 @@ class Reader:
             self._ffi.cast("int64_t*", indices_ptr),
             len(indices_array),
             parallelism,
-            c_array
+            c_array,
         )
         check_result(result)
 
         # Import to PyArrow
         import pyarrow as pa  # type: ignore
+
         return pa.RecordBatch._import_from_c(int(self._ffi.cast("uintptr_t", c_array)))
 
     def get_chunk_reader(self, column_group_id: int) -> ChunkReader:
@@ -405,11 +400,7 @@ class Reader:
             )
 
         chunk_handle = self._ffi.new("ChunkReaderHandle*")
-        result = self._lib.get_chunk_reader(
-            self._handle,
-            column_group_id,
-            chunk_handle
-        )
+        result = self._lib.get_chunk_reader(self._handle, column_group_id, chunk_handle)
         check_result(result)
 
         return ChunkReader(chunk_handle[0])

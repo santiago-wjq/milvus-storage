@@ -7,8 +7,8 @@ This module provides cffi wrappers around the C API defined in ffi_c.h.
 import os
 import platform
 from typing import Optional
-from cffi import FFI
 
+from cffi import FFI
 
 # Error codes from ffi_c.h
 LOON_SUCCESS = 0
@@ -25,7 +25,8 @@ LOON_INVALID_PROPERTIES = 7
 _ffi = FFI()
 
 # Define C structures and function signatures
-_ffi.cdef("""
+_ffi.cdef(
+    """
     // ==================== Arrow C Data Interface ====================
     struct ArrowSchema {
         const char* format;
@@ -162,7 +163,8 @@ _ffi.cdef("""
     FFIResult transaction_abort(TransactionHandle handle);
 
     void transaction_destroy(TransactionHandle handle);
-""")
+"""
+)
 
 
 def _find_library() -> str:
@@ -206,8 +208,8 @@ class MilvusStorageLib:
 
         try:
             print(f"Loading library from: {lib_path}")
-            self._lib = _ffi.dlopen(lib_path, os.RTLD_DEEPBIND|os.RTLD_LOCAL)
-            print(f"Successfully loaded library")
+            self._lib = _ffi.dlopen(lib_path, os.RTLD_DEEPBIND | os.RTLD_LOCAL)
+            print("Successfully loaded library")
         except Exception as e:
             print(f"Failed to load library: {e}")
             raise
@@ -259,7 +261,7 @@ def check_result(result) -> None:
     if not lib.IsSuccess(result_ptr):
         error_msg = lib.GetErrorMessage(result_ptr)
         if error_msg != ffi.NULL:
-            msg = ffi.string(error_msg).decode('utf-8')
+            msg = ffi.string(error_msg).decode("utf-8")
         else:
             msg = "Unknown error"
         lib.FreeFFIResult(result_ptr)

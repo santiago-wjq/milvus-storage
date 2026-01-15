@@ -1,0 +1,324 @@
+name: Java Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+      publish_target:
+        description: 'Publish target'
+        required: true
+        type: choice
+        options:
+          - github
+          - maven-central
+          - both
+        default: github
+      skip_tests:
+        description: 'Skip tests before release'
+        required: false
+        type: boolean
+        default: false
+
+  push:
+    tags:
+      - 'java-v[0-9]+.[0-9]+.[0-9]+'
+      - 'java-v[0-9]+.[0-9]+.[0-9]+-*'
+
+env:
+  CONAN_VERSION: "1.61.0"
+
+jobs:
+  # Build for Linux x86_64
+  build-linux-x86_64:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake
+          pip install conan==${{ env.CONAN_VERSION }}
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Setup Conan remote
+        run: |
+          conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local --insert || true
+          conan remote list
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan
+          key: conan-java-linux-${{ hashFiles('./cpp/conanfile.py') }}
+          restore-keys: conan-java-linux-
+
+      - name: Build JNI library
+        working-directory: ./cpp
+        run: |
+          make java-lib
+
+      - name: Prepare native libraries
+        run: |
+          mkdir -p java/native/linux-x86_64
+          # Find and copy libraries (they may be in different locations)
+          JNI_LIB=$(find cpp/build -name "libmilvus-storage-jni.so" -type f | head -1)
+          MAIN_LIB=$(find cpp/build -name "libmilvus-storage.so" -type f | head -1)
+          if [ -z "$JNI_LIB" ] || [ -z "$MAIN_LIB" ]; then
+            echo "ERROR: Libraries not found!"
+            find cpp/build -name "*.so" -type f
+            exit 1
+          fi
+          echo "Found JNI library at: $JNI_LIB"
+          echo "Found main library at: $MAIN_LIB"
+          cp "$JNI_LIB" java/native/linux-x86_64/
+          cp "$MAIN_LIB" java/native/linux-x86_64/
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: java/native/linux-x86_64/
+
+  # Package and test
+  package:
+    needs: [build-linux-x86_64]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Download all native libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: java/native/
+          pattern: native-*
+          merge-multiple: true
+
+      - name: List native libraries
+        run: |
+          find java/native -type f -name "*.so" | head -20
+
+      - name: Set version
+        working-directory: ./java
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from tag (remove 'java-v' prefix)
+            VERSION="${GITHUB_REF_NAME#java-v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          # Update version in build.sbt
+          sed -i "s/version := \".*\"/version := \"${VERSION}\"/" build.sbt
+          echo "Set version to ${VERSION}"
+
+      - name: Run tests
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        working-directory: ./java
+        run: |
+          # Copy Linux library for testing
+          cp native/linux-x86_64/libmilvus-storage-jni.so .
+          export LD_PRELOAD=$(pwd)/native/linux-x86_64/libmilvus-storage.so
+          sbt test
+
+      - name: Build fat JAR
+        working-directory: ./java
+        run: |
+          sbt assembly
+
+      - name: Build regular JAR
+        working-directory: ./java
+        run: |
+          sbt package
+
+      - name: Upload JAR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: |
+            java/target/scala-*/milvus-storage-*.jar
+            java/target/scala-*/*.pom
+
+  # Publish to GitHub Packages
+  publish-github:
+    needs: [package]
+    if: |
+      always() &&
+      needs.package.result == 'success' &&
+      (github.event_name == 'push' ||
+       github.event.inputs.publish_target == 'github' ||
+       github.event.inputs.publish_target == 'both')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: java/native/
+          pattern: native-*
+          merge-multiple: true
+
+      - name: Set version
+        working-directory: ./java
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#java-v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          sed -i "s/version := \".*\"/version := \"${VERSION}\"/" build.sbt
+
+      - name: Publish to GitHub Packages
+        working-directory: ./java
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          sbt publish
+
+  # Publish to Maven Central
+  publish-maven-central:
+    needs: [package]
+    if: |
+      always() &&
+      needs.package.result == 'success' &&
+      (github.event.inputs.publish_target == 'maven-central' ||
+       github.event.inputs.publish_target == 'both')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          server-id: ossrh
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: java/native/
+          pattern: native-*
+          merge-multiple: true
+
+      - name: Set version
+        working-directory: ./java
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#java-v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          sed -i "s/version := \".*\"/version := \"${VERSION}\"/" build.sbt
+
+      - name: Publish to Maven Central
+        working-directory: ./java
+        env:
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          sbt publishSigned
+
+  # Create GitHub Release
+  create-release:
+    needs: [package, publish-github]
+    if: |
+      always() &&
+      needs.package.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download JAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: jars
+          path: dist/
+
+      - name: Set version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#java-v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: java-v${{ env.VERSION }}
+          name: Java Release v${{ env.VERSION }}
+          draft: false
+          prerelease: ${{ contains(env.VERSION, '-') }}
+          files: |
+            dist/**/*.jar
+          body: |
+            ## Java/Scala Release v${{ env.VERSION }}
+
+            ### Installation
+
+            **Maven:**
+            ```xml
+            <dependency>
+              <groupId>com.zilliz</groupId>
+              <artifactId>milvus-storage-jni</artifactId>
+              <version>${{ env.VERSION }}</version>
+            </dependency>
+            ```
+
+            **SBT:**
+            ```scala
+            libraryDependencies += "com.zilliz" % "milvus-storage-jni" % "${{ env.VERSION }}"
+            ```
+
+            ### Supported Platforms
+            - Linux x86_64
