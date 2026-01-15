@@ -1,6 +1,18 @@
 include README.md
-include LICENSE
 include pyproject.toml
+include ../LICENSE
+
+# Include shared libraries
 recursive-include milvus_storage/lib *.so *.dylib *.dll
+
+# Include examples
+recursive-include examples *.py
+
+# Exclude build artifacts
 global-exclude __pycache__
 global-exclude *.py[cod]
+global-exclude *.so
+global-exclude *.dylib
+global-exclude .DS_Store
+prune tests
+prune .pytest_cache

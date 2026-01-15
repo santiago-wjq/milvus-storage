@@ -1,0 +1,374 @@
+name: Python Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+      publish_target:
+        description: 'Publish target'
+        required: true
+        type: choice
+        options:
+          - testpypi
+          - pypi
+        default: testpypi
+      skip_tests:
+        description: 'Skip tests before release'
+        required: false
+        type: boolean
+        default: false
+
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+env:
+  CONAN_VERSION: "1.61.0"
+
+jobs:
+  # Build wheel for Linux x86_64
+  build-linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install C++ dependencies
+        uses: aminya/setup-cpp@v1
+        with:
+          conan: ${{ env.CONAN_VERSION }}
+          cmake: true
+
+      - name: Setup Conan remote
+        run: |
+          conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local --insert
+          conan remote list
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan
+          key: conan-linux-x86_64-${{ hashFiles('./cpp/conanfile.py') }}
+          restore-keys: conan-linux-x86_64-
+
+      - name: Build C++ library for Python
+        working-directory: ./cpp
+        run: |
+          make python-lib
+
+      - name: Copy shared library to Python package
+        run: |
+          mkdir -p python/milvus_storage/lib
+          cp cpp/build/Release/lib/libmilvus-storage.so python/milvus_storage/lib/
+
+      - name: Set version
+        working-directory: ./python
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from tag (remove 'v' prefix)
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          # Update version in pyproject.toml
+          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Set version to ${VERSION}"
+          cat pyproject.toml | grep "version"
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build wheel auditwheel
+
+      - name: Build wheel
+        working-directory: ./python
+        run: |
+          python -m build --wheel
+
+      - name: Repair wheel with auditwheel
+        working-directory: ./python
+        run: |
+          auditwheel repair dist/*.whl -w dist/
+          # Remove the original wheel
+          rm dist/*-linux_x86_64.whl || true
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-x86_64
+          path: python/dist/*.whl
+
+  # Build wheel for Linux ARM64
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake python3-pip patchelf
+          pip3 install conan==1.61.0
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup Conan remote
+        run: |
+          conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local --insert || true
+          conan remote list
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan
+          key: conan-linux-arm64-${{ hashFiles('./cpp/conanfile.py') }}
+          restore-keys: conan-linux-arm64-
+
+      - name: Build C++ library for Python
+        working-directory: ./cpp
+        run: |
+          make python-lib
+
+      - name: Copy shared library to Python package
+        run: |
+          mkdir -p python/milvus_storage/lib
+          cp cpp/build/Release/lib/libmilvus-storage.so python/milvus_storage/lib/
+
+      - name: Set version
+        working-directory: ./python
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Set version to ${VERSION}"
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build wheel auditwheel
+
+      - name: Build wheel
+        working-directory: ./python
+        run: |
+          python -m build --wheel
+
+      - name: Repair wheel with auditwheel
+        working-directory: ./python
+        run: |
+          auditwheel repair dist/*.whl -w dist/
+          rm dist/*-linux_aarch64.whl || true
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-arm64
+          path: python/dist/*.whl
+
+  # Build wheel for macOS ARM64 (Apple Silicon)
+  build-macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install C++ dependencies
+        run: |
+          brew install conan@1 cmake
+          echo 'export PATH="/opt/homebrew/opt/conan@1/bin:$PATH"' >> ~/.bash_profile
+          export PATH="/opt/homebrew/opt/conan@1/bin:$PATH"
+
+      - name: Setup Conan remote
+        run: |
+          export PATH="/opt/homebrew/opt/conan@1/bin:$PATH"
+          conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local --insert || true
+          conan remote list
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan
+          key: conan-macos-arm64-${{ hashFiles('./cpp/conanfile.py') }}
+          restore-keys: conan-macos-arm64-
+
+      - name: Build C++ library for Python
+        working-directory: ./cpp
+        run: |
+          export PATH="/opt/homebrew/opt/conan@1/bin:$PATH"
+          make python-lib
+
+      - name: Copy shared library to Python package
+        run: |
+          mkdir -p python/milvus_storage/lib
+          cp cpp/build/Release/lib/libmilvus-storage.dylib python/milvus_storage/lib/
+
+      - name: Set version
+        working-directory: ./python
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          sed -i '' "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Set version to ${VERSION}"
+          cat pyproject.toml | grep "version"
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build wheel delocate
+
+      - name: Build wheel
+        working-directory: ./python
+        run: |
+          python -m build --wheel
+
+      - name: Repair wheel with delocate
+        working-directory: ./python
+        run: |
+          delocate-wheel -w dist/ -v dist/*.whl
+          ls -la dist/
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-macos-arm64
+          path: python/dist/*.whl
+
+  # Build source distribution
+  build-sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set version
+        working-directory: ./python
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          echo "Set version to ${VERSION}"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build source distribution
+        working-directory: ./python
+        run: |
+          python -m build --sdist
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: python/dist/*.tar.gz
+
+  # Test the built wheels
+  test-wheels:
+    needs: [build-linux-x86_64, build-linux-arm64, build-macos-arm64]
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: wheel-linux-x86_64
+          - os: ubuntu-24.04-arm64
+            artifact: wheel-linux-arm64
+          - os: macos-14
+            artifact: wheel-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/
+
+      - name: Install wheel
+        run: |
+          pip install dist/*.whl
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        working-directory: ./python
+        run: |
+          pytest tests/ -v --tb=short
+
+  # Publish to PyPI or TestPyPI
+  publish:
+    needs: [build-linux-x86_64, build-linux-arm64, build-macos-arm64, build-sdist, test-wheels]
+    if: |
+      always() &&
+      (needs.build-linux-x86_64.result == 'success') &&
+      (needs.build-sdist.result == 'success') &&
+      (needs.test-wheels.result == 'success' || github.event.inputs.skip_tests == 'true')
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target || 'pypi' }}
+      url: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'testpypi' && 'https://test.pypi.org/project/milvus-storage/' || 'https://pypi.org/project/milvus-storage/' }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: List distribution files
+        run: |
+          ls -la dist/
+
+      - name: Publish to TestPyPI
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'testpypi' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_target == 'pypi') }}
+        uses: pypa/gh-action-pypi-publish@release/v1
