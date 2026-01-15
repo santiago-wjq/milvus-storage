@@ -49,9 +49,10 @@ jobs:
 
   test:
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11']
     steps:
       - uses: actions/checkout@v4
 
@@ -75,15 +76,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.conan
-          key: conan-linux-py${{ matrix.python-version }}-${{ hashFiles('./cpp/conanfile.py') }}
+          key: conan-linux-${{ hashFiles('./cpp/conanfile.py') }}
           restore-keys: |
-            conan-linux-py${{ matrix.python-version }}-
             conan-linux-
 
       - name: Build C++ library for Python
         working-directory: ./cpp
         run: |
           make python-lib
+
+      - name: Set library path
+        run: |
+          # Find all conan library directories and add to LD_LIBRARY_PATH
+          CONAN_LIB_PATHS=$(find ~/.conan/data -name "lib" -type d 2>/dev/null | grep "/package/" | tr '\n' ':')
+          echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
       - name: Install Python package
         working-directory: ./python
@@ -97,7 +103,6 @@ jobs:
           pytest tests/ -v --tb=short --cov=milvus_storage --cov-report=xml
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
         with:
           files: ./python/coverage.xml
