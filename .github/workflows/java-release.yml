@@ -41,25 +41,8 @@ jobs:
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ccache
+          sudo apt-get install -y cmake
           pip install conan==${{ env.CONAN_VERSION }}
-
-      - name: Setup ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ccache-java-linux-x86_64-${{ github.sha }}
-          restore-keys: |
-            ccache-java-linux-x86_64-
-
-      - name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          # Use cmake launcher variables instead of CC/CXX to avoid breaking Rust builds
-          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -86,10 +69,6 @@ jobs:
         working-directory: ./cpp
         run: |
           make java-lib
-
-      - name: Show ccache stats
-        run: |
-          ccache -s
 
       - name: Prepare native libraries
         run: |

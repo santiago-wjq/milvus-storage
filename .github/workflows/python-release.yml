@@ -45,24 +45,8 @@ jobs:
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake patchelf ccache
+          sudo apt-get install -y cmake patchelf
           pip install conan==${{ env.CONAN_VERSION }}
-
-      - name: Setup ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ccache-python-linux-x86_64-${{ github.sha }}
-          restore-keys: |
-            ccache-python-linux-x86_64-
-
-      - name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          ccache -z
-          echo "CC=ccache gcc" >> $GITHUB_ENV
-          echo "CXX=ccache g++" >> $GITHUB_ENV
 
       - name: Setup Conan remote
         run: |
@@ -80,10 +64,6 @@ jobs:
         working-directory: ./cpp
         run: |
           make python-lib
-
-      - name: Show ccache stats
-        run: |
-          ccache -s
 
       - name: Copy shared library to Python package
         run: |
