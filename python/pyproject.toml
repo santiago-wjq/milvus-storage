@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "milvus-storage"
 version = "0.1.0"
-description = "Python bindings for milvus-storage"
-readme = "README.md"
+description = "Python bindings for milvus-storage - a high-performance storage engine using Apache Arrow Parquet"
+readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 authors = [
@@ -69,9 +69,11 @@ disallow_untyped_defs = false
 
 [tool.setuptools]
 packages = ["milvus_storage"]
+include-package-data = true
+zip-safe = false
 
 [tool.setuptools.package-data]
-milvus_storage = ["lib/*"]
+milvus_storage = ["lib/*.so", "lib/*.dylib", "lib/*.dll", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
