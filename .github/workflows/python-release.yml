@@ -76,11 +76,9 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            # Extract version from tag (remove 'v' prefix)
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          # Update version in pyproject.toml
           sed -i "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
           echo "Set version to ${VERSION}"
           cat pyproject.toml | grep "version"
@@ -99,88 +97,12 @@ jobs:
         working-directory: ./python
         run: |
           auditwheel repair dist/*.whl -w dist/
-          # Remove the original wheel
           rm dist/*-linux_x86_64.whl || true
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: wheel-linux-x86_64
-          path: python/dist/*.whl
-
-  # Build wheel for Linux ARM64
-  build-linux-arm64:
-    runs-on: ubuntu-24.04-arm64
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install C++ dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake python3-pip patchelf
-          pip3 install conan==1.61.0
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Setup Conan remote
-        run: |
-          conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local --insert || true
-          conan remote list
-
-      - name: Cache Conan packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.conan
-          key: conan-linux-arm64-${{ hashFiles('./cpp/conanfile.py') }}
-          restore-keys: conan-linux-arm64-
-
-      - name: Build C++ library for Python
-        working-directory: ./cpp
-        run: |
-          make python-lib
-
-      - name: Copy shared library to Python package
-        run: |
-          mkdir -p python/milvus_storage/lib
-          cp cpp/build/Release/lib/libmilvus-storage.so python/milvus_storage/lib/
-
-      - name: Set version
-        working-directory: ./python
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          sed -i "s/version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-          echo "Set version to ${VERSION}"
-
-      - name: Install Python build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build wheel auditwheel
-
-      - name: Build wheel
-        working-directory: ./python
-        run: |
-          python -m build --wheel
-
-      - name: Repair wheel with auditwheel
-        working-directory: ./python
-        run: |
-          auditwheel repair dist/*.whl -w dist/
-          rm dist/*-linux_aarch64.whl || true
-
-      - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-linux-arm64
           path: python/dist/*.whl
 
   # Build source distribution
@@ -224,17 +146,9 @@ jobs:
 
   # Test the built wheels
   test-wheels:
-    needs: [build-linux-x86_64, build-linux-arm64]
+    needs: [build-linux-x86_64]
     if: ${{ github.event.inputs.skip_tests != 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            artifact: wheel-linux-x86_64
-          - os: ubuntu-24.04-arm64
-            artifact: wheel-linux-arm64
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -246,7 +160,7 @@ jobs:
       - name: Download wheel
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: wheel-linux-x86_64
           path: dist/
 
       - name: Install wheel
@@ -264,7 +178,7 @@ jobs:
 
   # Publish to PyPI or TestPyPI
   publish:
-    needs: [build-linux-x86_64, build-linux-arm64, build-sdist, test-wheels]
+    needs: [build-linux-x86_64, build-sdist, test-wheels]
     if: |
       always() &&
       (needs.build-linux-x86_64.result == 'success') &&
