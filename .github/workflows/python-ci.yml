@@ -95,17 +95,32 @@ jobs:
           # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           
-          echo "Debugging Conan liblzma search:"
-          find ~/.conan/data -name "liblzma.so*" -ls || echo "find command failed"
+          # Target xz_utils specifically to find liblzma
+          # Path structure: ~/.conan/data/xz_utils/5.4.0/_/_/package/<hash>/lib
+          XZ_LIB_DIR=$(find ~/.conan/data -path "*/xz_utils/*/package/*/lib" -type d | head -n 1)
+          
+          if [ -n "$XZ_LIB_DIR" ]; then
+            echo "Found xz_utils lib dir at: $XZ_LIB_DIR"
+            ls -l "$XZ_LIB_DIR"
+            
+            # Find the actual library file (likely a symlink or the .so file)
+            # Pick liblzma.so.5 or liblzma.so if available
+            CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so.5*" | head -n 1)
+            
+            if [ -z "$CONAN_LZMA" ]; then
+               # Fallback to .so if .so.5 not found
+               CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so*" | head -n 1)
+            fi
 
-          # Find Conan's liblzma and preload it
-          # Relaxed pattern to liblzma.so*
-          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so*" 2>/dev/null | grep "/package/" | grep "/lib/" | head -n 1)
-          if [ -n "$CONAN_LZMA" ]; then
-            echo "Found Conan liblzma at: $CONAN_LZMA"
-            echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
+            if [ -n "$CONAN_LZMA" ]; then
+              echo "Setting LD_PRELOAD=$CONAN_LZMA"
+              echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
+            else
+              echo "WARNING: Could not find liblzma.so* in $XZ_LIB_DIR"
+            fi
           else
-            echo "WARNING: Conan liblzma not found!"
+            echo "WARNING: xz_utils package lib directory not found!"
+            find ~/.conan/data -name "xz_utils" -print
           fi
 
           echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
