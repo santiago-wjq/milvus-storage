@@ -95,30 +95,18 @@ jobs:
           # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           
-          # Target xz_utils specifically to find liblzma for LD_PRELOAD
-          # This is necessary because Python loads system liblzma (old), and glog needs newer symbols.
-          # We need to force preload the conan-provided shared liblzma.
-          XZ_LIB_DIR=$(find ~/.conan/data -path "*/xz_utils/*/package/*/lib" -type d | head -n 1)
+          # Find Conan's liblzma and preload it to override system liblzma
+          # We search for the shared library file directly across all xz_utils builds
+          CONAN_LZMA=$(find ~/.conan/data -path "*/xz_utils/*/package/*/lib/liblzma.so*" | head -n 1)
           
-          if [ -n "$XZ_LIB_DIR" ]; then
-            # Find the actual library file (liblzma.so.5 or liblzma.so)
-            CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so.5*" | head -n 1)
-            
-            if [ -z "$CONAN_LZMA" ]; then
-               CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so*" | head -n 1)
-            fi
-
-            if [ -n "$CONAN_LZMA" ]; then
-              echo "Found Conan liblzma at: $CONAN_LZMA"
-              echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
-            else
-              echo "WARNING: Could not find liblzma.so* in $XZ_LIB_DIR. Ensure xz_utils:shared=True in conanfile.py"
-            fi
+          if [ -n "$CONAN_LZMA" ]; then
+            echo "Found Conan liblzma at: $CONAN_LZMA"
+            echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
           else
-            echo "WARNING: xz_utils package lib directory not found!"
+            echo "WARNING: Conan liblzma.so* not found! Verify xz_utils:shared=True"
           fi
 
-          echo "Configured LD_LIBRARY_PATH for runtime"
+          echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
 
       - name: Install Python package
         working-directory: ./python
