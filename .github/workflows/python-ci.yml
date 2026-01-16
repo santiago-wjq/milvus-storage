@@ -94,7 +94,18 @@ jobs:
           CONAN_LIB_PATHS="${CONAN_LIB_PATHS%:}"
           # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
-          echo "Configured LD_LIBRARY_PATH for runtime"
+          
+          # Find Conan's liblzma and preload it to override system liblzma loaded by Python
+          # We look for liblzma.so.5 specifically as that's the SONAME usually
+          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so.5*" -type f 2>/dev/null | grep "/package/" | head -n 1)
+          if [ -n "$CONAN_LZMA" ]; then
+            echo "Found Conan liblzma at: $CONAN_LZMA"
+            echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
+          else
+            echo "WARNING: Conan liblzma not found!"
+          fi
+
+          echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
 
       - name: Install Python package
         working-directory: ./python
