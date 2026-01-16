@@ -95,43 +95,30 @@ jobs:
           # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           
-          # Target xz_utils specifically to find liblzma
-          # Path structure: ~/.conan/data/xz_utils/5.4.0/_/_/package/<hash>/lib
+          # Target xz_utils specifically to find liblzma for LD_PRELOAD
+          # This is necessary because Python loads system liblzma (old), and glog needs newer symbols.
+          # We need to force preload the conan-provided shared liblzma.
           XZ_LIB_DIR=$(find ~/.conan/data -path "*/xz_utils/*/package/*/lib" -type d | head -n 1)
           
           if [ -n "$XZ_LIB_DIR" ]; then
-            echo "Found xz_utils lib dir at: $XZ_LIB_DIR"
-            ls -l "$XZ_LIB_DIR"
-            
-            # Find the actual library file (likely a symlink or the .so file)
-            # Pick liblzma.so.5 or liblzma.so if available
+            # Find the actual library file (liblzma.so.5 or liblzma.so)
             CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so.5*" | head -n 1)
             
             if [ -z "$CONAN_LZMA" ]; then
-               # Fallback to .so if .so.5 not found
                CONAN_LZMA=$(find "$XZ_LIB_DIR" -name "liblzma.so*" | head -n 1)
             fi
 
             if [ -n "$CONAN_LZMA" ]; then
-              echo "Setting LD_PRELOAD=$CONAN_LZMA"
+              echo "Found Conan liblzma at: $CONAN_LZMA"
               echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
             else
-              echo "WARNING: Could not find liblzma.so* in $XZ_LIB_DIR"
+              echo "WARNING: Could not find liblzma.so* in $XZ_LIB_DIR. Ensure xz_utils:shared=True in conanfile.py"
             fi
           else
             echo "WARNING: xz_utils package lib directory not found!"
-            find ~/.conan/data -name "xz_utils" -print
           fi
 
-          echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
-
-      - name: Verify Environment
-        run: |
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-          echo "LD_PRELOAD=$LD_PRELOAD"
-          if [ -n "$LD_PRELOAD" ]; then
-            ls -l "$LD_PRELOAD" || echo "LD_PRELOAD file not accessible"
-          fi
+          echo "Configured LD_LIBRARY_PATH for runtime"
 
       - name: Install Python package
         working-directory: ./python
