@@ -41,7 +41,7 @@ class Properties:
         """
         self._ffi = get_ffi()
         self._lib = get_library().lib
-        self._props = self._ffi.new("LoonProperties*")
+        self._props = self._ffi.new("struct LoonProperties*")
 
         if properties:
             self._create_from_dict(properties)
