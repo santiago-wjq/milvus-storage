@@ -74,6 +74,7 @@ class StorageConan(ConanFile):
         "CMakeLists.txt",
         "*.cmake",
         "conanfile.py",
+        "ffi_exports.map",
     )
 
     @property
