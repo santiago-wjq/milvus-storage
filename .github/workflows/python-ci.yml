@@ -96,8 +96,8 @@ jobs:
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           
           # Find Conan's liblzma and preload it to override system liblzma loaded by Python
-          # We look for liblzma.so.5 specifically as that's the SONAME usually
-          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so.5*" -type f 2>/dev/null | grep "/package/" | head -n 1)
+          # Remove -type f to allow symlinks, and look for specific version pattern if possible or just the .so.5
+          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so.5*" 2>/dev/null | grep "/package/" | head -n 1)
           if [ -n "$CONAN_LZMA" ]; then
             echo "Found Conan liblzma at: $CONAN_LZMA"
             echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
@@ -106,6 +106,14 @@ jobs:
           fi
 
           echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
+
+      - name: Verify Environment
+        run: |
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          echo "LD_PRELOAD=$LD_PRELOAD"
+          if [ -n "$LD_PRELOAD" ]; then
+            ls -l "$LD_PRELOAD" || echo "LD_PRELOAD file not accessible"
+          fi
 
       - name: Install Python package
         working-directory: ./python
