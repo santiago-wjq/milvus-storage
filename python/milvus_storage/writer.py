@@ -158,11 +158,7 @@ class Writer:
 
         # Pass NULL for meta_keys/vals/len as we don't support custom metadata yet
         result = self._lib.loon_writer_close(
-            self._handle, 
-            self._ffi.NULL, 
-            self._ffi.NULL, 
-            0, 
-            column_groups_ptr
+            self._handle, self._ffi.NULL, self._ffi.NULL, 0, column_groups_ptr
         )
         check_result(result)
 

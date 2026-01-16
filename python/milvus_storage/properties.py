@@ -79,7 +79,9 @@ class Properties:
         values_array = self._ffi.new("char*[]", values_c)
 
         # Call C API
-        result = self._lib.loon_properties_create(keys_array, values_array, len(keys_list), self._props)
+        result = self._lib.loon_properties_create(
+            keys_array, values_array, len(keys_list), self._props
+        )
         check_result(result)
 
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
