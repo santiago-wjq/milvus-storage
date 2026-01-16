@@ -102,9 +102,15 @@ jobs:
           if [ -n "$CONAN_LZMA" ]; then
             echo "Found Conan liblzma at: $CONAN_LZMA"
             echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
+            
+            echo "Checking symbol in $CONAN_LZMA:"
+            nm -D "$CONAN_LZMA" | grep lzma_index_uncompressed_size || echo "Symbol NOT FOUND in Conan lib"
           else
             echo "WARNING: Conan liblzma.so* not found! Verify xz_utils:shared=True"
           fi
+          
+          echo "Checking system liblzma symbol:"
+          nm -D /usr/lib/x86_64-linux-gnu/liblzma.so.5 2>/dev/null | grep lzma_index_uncompressed_size || echo "Symbol NOT FOUND in System lib"
 
           echo "Configured LD_LIBRARY_PATH and LD_PRELOAD for runtime"
 

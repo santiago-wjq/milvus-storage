@@ -208,7 +208,7 @@ class MilvusStorageLib:
 
         try:
             print(f"Loading library from: {lib_path}")
-            self._lib = _ffi.dlopen(lib_path, os.RTLD_DEEPBIND | os.RTLD_LOCAL)
+            self._lib = _ffi.dlopen(lib_path, os.RTLD_LOCAL)
             print("Successfully loaded library")
         except Exception as e:
             print(f"Failed to load library: {e}")
