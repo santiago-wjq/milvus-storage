@@ -125,7 +125,7 @@ _ffi.cdef(
 
     // ==================== Reader C Interface ====================
     typedef uintptr_t LoonReaderHandle;
-    
+
     // Forward declaration for ColumnGroups
     typedef struct LoonColumnGroups LoonColumnGroups;
 
@@ -167,7 +167,7 @@ _ffi.cdef(
     // FFIResult transaction_abort(TransactionHandle handle);
 
     void loon_transaction_destroy(LoonTransactionHandle handle);
-    
+
     // Column groups create/destroy
     LoonFFIResult loon_column_groups_create(const char** columns,
                                                    size_t col_lens,
@@ -177,7 +177,7 @@ _ffi.cdef(
                                                    int64_t* end_indices,
                                                    size_t file_lens,
                                                    LoonColumnGroups** out_column_groups);
-                                                   
+
     void loon_column_groups_destroy(LoonColumnGroups* cgroups);
 """
 )
