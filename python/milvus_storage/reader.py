@@ -63,7 +63,7 @@ class ChunkReader:
 
         # Allocate Arrow C Data Interface structure using milvus-storage FFI
         c_array = self._ffi.new("struct ArrowArray*")
-        result = self._lib.get_chunk(self._handle, index, c_array)
+        result = self._lib.loon_get_chunk(self._handle, index, c_array)
         check_result(result)
 
         # Import to PyArrow
@@ -106,7 +106,7 @@ class ChunkReader:
         arrays_ptr_holder = self._ffi.new("struct ArrowArray**")
         num_arrays = self._ffi.new("size_t*")
 
-        result = self._lib.get_chunks(
+        result = self._lib.loon_get_chunks(
             self._handle,
             self._ffi.cast("int64_t*", indices_ptr),
             len(indices_array),
@@ -132,7 +132,7 @@ class ChunkReader:
             batches.append(batch)
 
         # Free C arrays
-        self._lib.free_chunk_arrays(arrays_ptr, num_arrays[0])
+        self._lib.loon_free_chunk_arrays(arrays_ptr, num_arrays[0])
 
         return batches
 
@@ -160,7 +160,7 @@ class ChunkReader:
         chunk_indices_ptr = self._ffi.new("int64_t**")
         num_chunks = self._ffi.new("size_t*")
 
-        result = self._lib.get_chunk_indices(
+        result = self._lib.loon_get_chunk_indices(
             self._handle,
             self._ffi.cast("int64_t*", row_indices_ptr),
             len(row_indices_array),
@@ -176,14 +176,14 @@ class ChunkReader:
         ).copy()
 
         # Free C array
-        self._lib.free_chunk_indices(chunk_indices_ptr[0])
+        self._lib.loon_free_chunk_indices(chunk_indices_ptr[0])
 
         return chunk_indices
 
     def close(self) -> None:
         """Close the chunk reader and free resources."""
         if not self._closed and self._handle is not None:
-            self._lib.chunk_reader_destroy(self._handle)
+            self._lib.loon_chunk_reader_destroy(self._handle)
             self._handle = None
             self._closed = True
 
@@ -227,7 +227,7 @@ class Reader:
 
     def __init__(
         self,
-        column_groups: str,
+        column_groups,
         schema: "pa.Schema",
         columns: Optional[List[str]] = None,
         properties: Optional[Dict[str, str]] = None,
@@ -236,7 +236,7 @@ class Reader:
         Initialize a new Reader.
 
         Args:
-            column_groups: JSON string containing dataset column groups
+            column_groups: Dataset column groups handle (from Writer.close)
             schema: PyArrow schema for the dataset
             columns: Optional list of column names to read (default: all)
             properties: Optional configuration properties
@@ -279,9 +279,9 @@ class Reader:
             num_columns = 0
 
         # Create reader
-        handle = self._ffi.new("ReaderHandle*")
-        result = self._lib.reader_new(
-            column_groups.encode("utf-8"),
+        handle = self._ffi.new("LoonReaderHandle*")
+        result = self._lib.loon_reader_new(
+            column_groups,
             c_schema,
             columns_array,
             num_columns,
@@ -318,7 +318,7 @@ class Reader:
 
         predicate_bytes = predicate.encode("utf-8") if predicate else self._ffi.NULL
 
-        result = self._lib.get_record_batch_reader(self._handle, predicate_bytes, c_stream)
+        result = self._lib.loon_get_record_batch_reader(self._handle, predicate_bytes, c_stream)
         check_result(result)
 
         # Import to PyArrow
@@ -362,7 +362,7 @@ class Reader:
         # Allocate Arrow C Data Interface structure using milvus-storage FFI
         c_array = self._ffi.new("struct ArrowArray*")
 
-        result = self._lib.take(
+        result = self._lib.loon_take(
             self._handle,
             self._ffi.cast("int64_t*", indices_ptr),
             len(indices_array),
@@ -399,8 +399,8 @@ class Reader:
                 f"column_group_id must be non-negative, got {column_group_id}"
             )
 
-        chunk_handle = self._ffi.new("ChunkReaderHandle*")
-        result = self._lib.get_chunk_reader(self._handle, column_group_id, chunk_handle)
+        chunk_handle = self._ffi.new("LoonChunkReaderHandle*")
+        result = self._lib.loon_get_chunk_reader(self._handle, column_group_id, chunk_handle)
         check_result(result)
 
         return ChunkReader(chunk_handle[0])
@@ -408,7 +408,7 @@ class Reader:
     def close(self) -> None:
         """Close the reader and free resources."""
         if not self._closed and self._handle is not None:
-            self._lib.reader_destroy(self._handle)
+            self._lib.loon_reader_destroy(self._handle)
             self._handle = None
             self._closed = True
 

@@ -41,7 +41,7 @@ class Properties:
         """
         self._ffi = get_ffi()
         self._lib = get_library().lib
-        self._props = self._ffi.new("Properties*")
+        self._props = self._ffi.new("LoonProperties*")
 
         if properties:
             self._create_from_dict(properties)
@@ -79,7 +79,7 @@ class Properties:
         values_array = self._ffi.new("char*[]", values_c)
 
         # Call C API
-        result = self._lib.properties_create(keys_array, values_array, len(keys_list), self._props)
+        result = self._lib.loon_properties_create(keys_array, values_array, len(keys_list), self._props)
         check_result(result)
 
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
@@ -94,7 +94,7 @@ class Properties:
             Property value or default if not found
         """
         key_bytes = key.encode("utf-8")
-        value = self._lib.properties_get(self._props, key_bytes)
+        value = self._lib.loon_properties_get(self._props, key_bytes)
 
         if value != self._ffi.NULL:
             return self._ffi.string(value).decode("utf-8")
@@ -107,7 +107,7 @@ class Properties:
     def __del__(self):
         """Clean up C resources."""
         if hasattr(self, "_props") and hasattr(self, "_lib"):
-            self._lib.properties_free(self._props)
+            self._lib.loon_properties_free(self._props)
 
     def __repr__(self) -> str:
         """String representation."""

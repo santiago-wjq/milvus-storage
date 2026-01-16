@@ -74,8 +74,8 @@ class Writer:
         schema._export_to_c(int(self._ffi.cast("uintptr_t", c_schema)))
 
         # Create writer
-        handle = self._ffi.new("WriterHandle*")
-        result = self._lib.writer_new(
+        handle = self._ffi.new("LoonWriterHandle*")
+        result = self._lib.loon_writer_new(
             path.encode("utf-8"), c_schema, self._props._get_c_properties(), handle
         )
         check_result(result)
@@ -118,7 +118,7 @@ class Writer:
         batch._export_to_c(int(self._ffi.cast("uintptr_t", c_array)))
 
         # Write
-        result = self._lib.writer_write(self._handle, c_array)
+        result = self._lib.loon_writer_write(self._handle, c_array)
         check_result(result)
 
     def flush(self) -> None:
@@ -135,19 +135,17 @@ class Writer:
         if self._closed or self._handle is None:
             raise ResourceError("Writer is closed")
 
-        result = self._lib.writer_flush(self._handle)
+        result = self._lib.loon_writer_flush(self._handle)
         check_result(result)
 
-    def close(self) -> str:
+    def close(self):
         """
         Close the writer and return the column groups.
 
-        This finalizes all writes and returns a JSON string containing the
-        column groups metadata for the written dataset. The column groups are needed
-        to read the data later.
+        This finalizes all writes and returns the column groups metadata.
 
         Returns:
-            JSON string containing the dataset column groups
+            LoonColumnGroups pointer containing the dataset column groups
 
         Raises:
             ResourceError: If writer is already closed
@@ -156,19 +154,22 @@ class Writer:
         if self._closed or self._handle is None:
             raise ResourceError("Writer is already closed")
 
-        column_groups_ptr = self._ffi.new("char**")
+        column_groups_ptr = self._ffi.new("LoonColumnGroups**")
 
-        result = self._lib.writer_close(self._handle, column_groups_ptr)
+        # Pass NULL for meta_keys/vals/len as we don't support custom metadata yet
+        result = self._lib.loon_writer_close(
+            self._handle, 
+            self._ffi.NULL, 
+            self._ffi.NULL, 
+            0, 
+            column_groups_ptr
+        )
         check_result(result)
 
-        # Copy column groups to Python string
-        column_groups = self._ffi.string(column_groups_ptr[0]).decode("utf-8")
-
-        # Free C string
-        self._lib.free_cstr(column_groups_ptr[0])
+        column_groups = column_groups_ptr[0]
 
         # Destroy writer
-        self._lib.writer_destroy(self._handle)
+        self._lib.loon_writer_destroy(self._handle)
         self._handle = None
         self._closed = True
 
@@ -193,7 +194,7 @@ class Writer:
         try:
             if hasattr(self, "_closed") and hasattr(self, "_handle") and hasattr(self, "_lib"):
                 if not self._closed and self._handle is not None:
-                    self._lib.writer_destroy(self._handle)
+                    self._lib.loon_writer_destroy(self._handle)
                     self._handle = None
         except Exception:
             # Suppress all exceptions in destructor
