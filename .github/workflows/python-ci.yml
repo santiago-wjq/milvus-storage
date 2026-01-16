@@ -90,10 +90,10 @@ jobs:
         run: |
           # Find all conan library directories and add to LD_LIBRARY_PATH
           CONAN_LIB_PATHS=$(find ~/.conan/data -name "lib" -type d 2>/dev/null | grep "/package/" | tr '\n' ':')
-          # Also add system library paths for dependencies like liblzma
           # Remove trailing colon from CONAN_LIB_PATHS if present
           CONAN_LIB_PATHS="${CONAN_LIB_PATHS%:}"
-          echo "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib:${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+          # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
+          echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           echo "Configured LD_LIBRARY_PATH for runtime"
 
       - name: Install Python package
