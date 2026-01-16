@@ -95,9 +95,12 @@ jobs:
           # Put CONAN_LIB_PATHS first to ensure conan-provided libraries (like newer liblzma) are preferred over system ones
           echo "LD_LIBRARY_PATH=${CONAN_LIB_PATHS}:${LD_LIBRARY_PATH}" >> $GITHUB_ENV
           
-          # Find Conan's liblzma and preload it to override system liblzma loaded by Python
-          # Remove -type f to allow symlinks, and look for specific version pattern if possible or just the .so.5
-          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so.5*" 2>/dev/null | grep "/package/" | head -n 1)
+          echo "Debugging Conan liblzma search:"
+          find ~/.conan/data -name "liblzma.so*" -ls || echo "find command failed"
+
+          # Find Conan's liblzma and preload it
+          # Relaxed pattern to liblzma.so*
+          CONAN_LZMA=$(find ~/.conan/data -name "liblzma.so*" 2>/dev/null | grep "/package/" | grep "/lib/" | head -n 1)
           if [ -n "$CONAN_LZMA" ]; then
             echo "Found Conan liblzma at: $CONAN_LZMA"
             echo "LD_PRELOAD=$CONAN_LZMA" >> $GITHUB_ENV
