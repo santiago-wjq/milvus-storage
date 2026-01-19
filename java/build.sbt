@@ -1,13 +1,26 @@
 ThisBuild / organizationName := "zilliz"
 ThisBuild / organizationHomepage := Some(url("https://zilliz.com/"))
+ThisBuild / organization := "com.zilliz"
 
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "2.13.12"
 
+// Publishing settings for GitHub Packages
+ThisBuild / publishTo := sys.env.get("GITHUB_REPOSITORY").map { repo =>
+  "GitHub Packages" at s"https://maven.pkg.github.com/$repo"
+}
+
+ThisBuild / credentials ++= (for {
+  actor <- sys.env.get("GITHUB_ACTOR")
+  token <- sys.env.get("GITHUB_TOKEN")
+} yield Credentials("GitHub Package Registry", "maven.pkg.github.com", actor, token)).toSeq
+ThisBuild / publishMavenStyle := true
+ThisBuild / versionScheme := Some("early-semver")
+
 lazy val root = (project in file("."))
   .settings(
-    name := "milvus-storage-jni-test",
+    name := "milvus-storage-jni",
 
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.17" % Test,
