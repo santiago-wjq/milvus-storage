@@ -90,7 +90,9 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
-          sed -i 's/version = ".*"/version = "'"${VERSION}"'"/' pyproject.toml
+          # Ensure version is PEP 440 compliant (replace - with .)
+          VERSION_PEP440=$(echo "${VERSION}" | tr '-' '.')
+          sed -i 's/version = ".*"/version = "'"${VERSION_PEP440}"'"/' pyproject.toml
 
       - name: Build Wheel & Sdist
         working-directory: ./python
@@ -186,8 +188,13 @@ jobs:
       - name: Copy Native Libs
         run: |
           mkdir -p java/native/linux-x86_64
-          cp $(find cpp/build -name "libmilvus-storage-jni.so" | head -1) java/native/linux-x86_64/
-          cp $(find cpp/build -name "libmilvus-storage.so" | head -1) java/native/linux-x86_64/
+          # Copy all shared libraries from the lib directory, which includes dependencies
+          if [ -d "cpp/build/Release/lib" ]; then
+            cp -P cpp/build/Release/lib/*.so* java/native/linux-x86_64/
+          else
+            # Fallback if Release/lib doesn't exist for some reason
+            cp $(find cpp/build -name "*.so*" | head -20) java/native/linux-x86_64/
+          fi
 
       - name: Set Java Version
         working-directory: ./java
@@ -203,8 +210,8 @@ jobs:
         if: ${{ github.event.inputs.skip_tests != 'true' }}
         working-directory: ./java
         run: |
-          cp native/linux-x86_64/libmilvus-storage-jni.so .
-          export LD_PRELOAD=$(pwd)/native/linux-x86_64/libmilvus-storage.so
+          # Use LD_LIBRARY_PATH instead of LD_PRELOAD to avoid breaking shell commands
+          export LD_LIBRARY_PATH=$(pwd)/native/linux-x86_64:$LD_LIBRARY_PATH
           sbt test
 
       - name: Build JARs
@@ -219,7 +226,7 @@ jobs:
           path: |
             java/target/scala-*/milvus-storage-*.jar
             java/target/scala-*/milvus-storage-*.pom
-            java/native/linux-x86_64/*.so
+            java/native/linux-x86_64/*.so*
 
   publish-java:
     needs: build-java-linux
@@ -252,7 +259,7 @@ jobs:
       - name: Restore Native Libs
         run: |
           mkdir -p java/native/linux-x86_64
-          cp java_dist_temp/*.so java/native/linux-x86_64/
+          cp -P java_dist_temp/*.so* java/native/linux-x86_64/
 
       - name: Set Java Version
         working-directory: ./java
