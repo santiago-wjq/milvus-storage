@@ -185,21 +185,23 @@ jobs:
         working-directory: ./cpp
         run: make java-lib
 
+      - name: Import Conan Dependencies
+        working-directory: ./cpp
+        run: conan imports . -if build
+
       - name: Copy Native Libs
         run: |
           mkdir -p java/native/linux-x86_64
-          # Copy all shared libraries from the lib directory, which includes dependencies
+
+          # Copy libraries from CMake build output
           if [ -d "cpp/build/Release/lib" ]; then
-            cp -P cpp/build/Release/lib/*.so* java/native/linux-x86_64/
+            cp -P cpp/build/Release/lib/*.so* java/native/linux-x86_64/ || true
           fi
 
-          # Manually find and copy missing libraries from Conan cache
-          # CMake's CopyDependencies.cmake might miss them if ldd can't resolve them in the build env
-          echo "Searching for missing AWS libraries in Conan cache..."
-          find ~/.conan/data -path "*/package/*/lib/libaws-cpp-sdk-*.so*" -exec cp -nP {} java/native/linux-x86_64/ \; || true
-
-          echo "Searching for missing Boost libraries in Conan cache..."
-          find ~/.conan/data -path "*/package/*/lib/libboost_*.so*" -exec cp -nP {} java/native/linux-x86_64/ \; || true
+          # Copy all dependency libraries from conan imports output
+          if [ -d "cpp/build/Release/libs" ]; then
+            cp -P cpp/build/Release/libs/*.so* java/native/linux-x86_64/ || true
+          fi
 
           echo "Native libraries in java/native/linux-x86_64:"
           ls -l java/native/linux-x86_64/
