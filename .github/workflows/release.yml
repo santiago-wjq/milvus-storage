@@ -192,12 +192,15 @@ jobs:
           if [ -d "cpp/build/Release/lib" ]; then
             cp -P cpp/build/Release/lib/*.so* java/native/linux-x86_64/
           fi
-          
-          # Manually find and copy missing AWS SDK libraries from Conan cache
+
+          # Manually find and copy missing libraries from Conan cache
           # CMake's CopyDependencies.cmake might miss them if ldd can't resolve them in the build env
           echo "Searching for missing AWS libraries in Conan cache..."
           find ~/.conan/data -path "*/package/*/lib/libaws-cpp-sdk-*.so*" -exec cp -nP {} java/native/linux-x86_64/ \; || true
-          
+
+          echo "Searching for missing Boost libraries in Conan cache..."
+          find ~/.conan/data -path "*/package/*/lib/libboost_*.so*" -exec cp -nP {} java/native/linux-x86_64/ \; || true
+
           echo "Native libraries in java/native/linux-x86_64:"
           ls -l java/native/linux-x86_64/
 
