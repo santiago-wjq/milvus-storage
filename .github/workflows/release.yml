@@ -101,8 +101,10 @@ jobs:
       - name: Repair wheel
         working-directory: ./python
         run: |
-          auditwheel repair dist/*.whl -w dist/
-          rm dist/*-linux_x86_64.whl || true
+          mkdir -p temp_wheels
+          mv dist/*.whl temp_wheels/
+          auditwheel repair temp_wheels/*.whl -w dist/
+          ls -l dist/
 
       - name: Upload Python Artifacts
         uses: actions/upload-artifact@v4
