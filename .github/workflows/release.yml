@@ -269,7 +269,7 @@ jobs:
       - name: Restore Native Libs
         run: |
           mkdir -p java/native/linux-x86_64
-          cp -P java_dist_temp/*.so* java/native/linux-x86_64/
+          cp -P java_dist_temp/java/native/linux-x86_64/*.so* java/native/linux-x86_64/
 
       - name: Set Java Version
         working-directory: ./java
