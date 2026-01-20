@@ -191,10 +191,15 @@ jobs:
           # Copy all shared libraries from the lib directory, which includes dependencies
           if [ -d "cpp/build/Release/lib" ]; then
             cp -P cpp/build/Release/lib/*.so* java/native/linux-x86_64/
-          else
-            # Fallback if Release/lib doesn't exist for some reason
-            cp $(find cpp/build -name "*.so*" | head -20) java/native/linux-x86_64/
           fi
+          
+          # Manually find and copy missing AWS SDK libraries from Conan cache
+          # CMake's CopyDependencies.cmake might miss them if ldd can't resolve them in the build env
+          echo "Searching for missing AWS libraries in Conan cache..."
+          find ~/.conan/data -path "*/package/*/lib/libaws-cpp-sdk-*.so*" -exec cp -nP {} java/native/linux-x86_64/ \; || true
+          
+          echo "Native libraries in java/native/linux-x86_64:"
+          ls -l java/native/linux-x86_64/
 
       - name: Set Java Version
         working-directory: ./java
