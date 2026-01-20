@@ -90,9 +90,7 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
-          # Ensure version is PEP 440 compliant (replace - with .)
-          VERSION_PEP440=$(echo "${VERSION}" | tr '-' '.')
-          sed -i 's/version = ".*"/version = "'"${VERSION_PEP440}"'"/' pyproject.toml
+          sed -i 's/version = ".*"/version = "'"${VERSION}"'"/' pyproject.toml
 
       - name: Build Wheel & Sdist
         working-directory: ./python
