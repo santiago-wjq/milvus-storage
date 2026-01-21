@@ -31,14 +31,10 @@ ThisBuild / versionScheme := Some("early-semver")
 
 // Sonatype Central settings for Maven Central
 ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
+ThisBuild / sonatypeRepository := "https://central.sonatype.com/api/v1/publisher"
 
-// Choose publish target based on environment
-ThisBuild / publishTo := {
-  if (isSnapshot.value)
-    Some("snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")
-  else
-    Some("releases" at "https://central.sonatype.com/repository/maven-releases/")
-}
+// publishSigned stages locally, then sonatypeCentralUpload pushes to Central
+ThisBuild / publishTo := sonatypePublishToBundle.value
 
 // GitHub Packages credentials (for publish command)
 ThisBuild / credentials ++= (for {
