@@ -312,7 +312,7 @@ jobs:
           PGP_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           SONATYPE_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-        run: sbt publishSigned sonatypeCentralUpload
+        run: sbt publishSigned sonatypeBundleRelease
 
   # =================================================================================================
   # GITHUB RELEASE
