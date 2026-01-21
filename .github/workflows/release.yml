@@ -288,7 +288,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_ACTOR: ${{ github.actor }}
-        run: sbt publish
+        run: |
+          sbt 'set publishTo := Some("GitHub Packages" at s"https://maven.pkg.github.com/${{ github.repository }}")' publish
 
       - name: Publish to Maven Central
         if: ${{ github.event_name == 'push' || github.event.inputs.publish_java == 'maven-central' || github.event.inputs.publish_java == 'both' }}

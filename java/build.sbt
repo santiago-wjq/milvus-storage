@@ -6,17 +6,53 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "2.13.12"
 
-// Publishing settings for GitHub Packages
-ThisBuild / publishTo := sys.env.get("GITHUB_REPOSITORY").map { repo =>
-  "GitHub Packages" at s"https://maven.pkg.github.com/$repo"
+// POM metadata required for Maven Central
+ThisBuild / description := "Milvus Storage JNI bindings for Java/Scala"
+ThisBuild / licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0"))
+ThisBuild / homepage := Some(url("https://github.com/milvus-io/milvus-storage"))
+ThisBuild / scmInfo := Some(
+  ScmInfo(
+    url("https://github.com/milvus-io/milvus-storage"),
+    "scm:git@github.com:milvus-io/milvus-storage.git"
+  )
+)
+ThisBuild / developers := List(
+  Developer(
+    id = "milvus-io",
+    name = "Milvus Team",
+    email = "milvus-team@zilliz.com",
+    url = url("https://milvus.io")
+  )
+)
+
+// Publishing settings
+ThisBuild / publishMavenStyle := true
+ThisBuild / versionScheme := Some("early-semver")
+
+// Sonatype settings for Maven Central
+ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+ThisBuild / sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
+
+// Choose publish target based on environment
+ThisBuild / publishTo := {
+  val nexus = "https://s01.oss.sonatype.org/"
+  if (isSnapshot.value)
+    Some("snapshots" at nexus + "content/repositories/snapshots")
+  else
+    Some("releases" at nexus + "service/local/staging/deploy/maven2")
 }
 
+// GitHub Packages credentials (for publish command)
 ThisBuild / credentials ++= (for {
   actor <- sys.env.get("GITHUB_ACTOR")
   token <- sys.env.get("GITHUB_TOKEN")
 } yield Credentials("GitHub Package Registry", "maven.pkg.github.com", actor, token)).toSeq
-ThisBuild / publishMavenStyle := true
-ThisBuild / versionScheme := Some("early-semver")
+
+// Sonatype credentials (for publishSigned command)
+ThisBuild / credentials ++= (for {
+  username <- sys.env.get("MAVEN_USERNAME")
+  password <- sys.env.get("MAVEN_PASSWORD")
+} yield Credentials("Sonatype Nexus Repository Manager", "s01.oss.sonatype.org", username, password)).toSeq
 
 lazy val root = (project in file("."))
   .settings(
