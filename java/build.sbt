@@ -29,17 +29,15 @@ ThisBuild / developers := List(
 ThisBuild / publishMavenStyle := true
 ThisBuild / versionScheme := Some("early-semver")
 
-// Sonatype settings for Maven Central
-ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
-ThisBuild / sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
+// Sonatype Central settings for Maven Central
+ThisBuild / sonatypeCredentialHost := "central.sonatype.com"
 
 // Choose publish target based on environment
 ThisBuild / publishTo := {
-  val nexus = "https://s01.oss.sonatype.org/"
   if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
+    Some("snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")
   else
-    Some("releases" at nexus + "service/local/staging/deploy/maven2")
+    Some("releases" at "https://central.sonatype.com/repository/maven-releases/")
 }
 
 // GitHub Packages credentials (for publish command)
@@ -52,7 +50,7 @@ ThisBuild / credentials ++= (for {
 ThisBuild / credentials ++= (for {
   username <- sys.env.get("MAVEN_USERNAME")
   password <- sys.env.get("MAVEN_PASSWORD")
-} yield Credentials("Sonatype Nexus Repository Manager", "s01.oss.sonatype.org", username, password)).toSeq
+} yield Credentials("Sonatype Nexus Repository Manager", "central.sonatype.com", username, password)).toSeq
 
 lazy val root = (project in file("."))
   .settings(
