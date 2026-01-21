@@ -52,6 +52,10 @@ ThisBuild / credentials ++= (for {
   password <- sys.env.get("MAVEN_PASSWORD")
 } yield Credentials("Sonatype Nexus Repository Manager", "central.sonatype.com", username, password)).toSeq
 
+// GPG signing settings for Maven Central
+ThisBuild / useGpgPinentry := true
+ThisBuild / pgpPassphrase := sys.env.get("PGP_PASSPHRASE").map(_.toCharArray)
+
 lazy val root = (project in file("."))
   .settings(
     name := "milvus-storage-jni",

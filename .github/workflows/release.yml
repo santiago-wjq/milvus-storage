@@ -291,6 +291,17 @@ jobs:
         run: |
           sbt 'set publishTo := Some("GitHub Packages" at s"https://maven.pkg.github.com/${{ github.repository }}")' publish
 
+      - name: Configure GPG for non-interactive signing
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_java == 'maven-central' || github.event.inputs.publish_java == 'both' }}
+        run: |
+          # Configure GPG agent for loopback pinentry (required for CI)
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo "use-agent" >> ~/.gnupg/gpg.conf
+          chmod 700 ~/.gnupg
+          gpgconf --kill gpg-agent || true
+
       - name: Publish to Maven Central
         if: ${{ github.event_name == 'push' || github.event.inputs.publish_java == 'maven-central' || github.event.inputs.publish_java == 'both' }}
         working-directory: ./java
@@ -298,6 +309,7 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          PGP_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: sbt publishSigned
 
   # =================================================================================================
