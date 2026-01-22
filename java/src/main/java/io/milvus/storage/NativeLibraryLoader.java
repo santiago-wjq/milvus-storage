@@ -47,40 +47,78 @@ public class NativeLibraryLoader {
      */
     private static void loadFromResources() throws IOException {
         String os = System.getProperty("os.name").toLowerCase();
+        String arch = System.getProperty("os.arch").toLowerCase();
         String libExtension;
+        String platform;
 
         if (os.contains("windows")) {
             libExtension = "dll";
+            platform = "windows-" + (arch.contains("64") ? "x86_64" : "x86");
         } else if (os.contains("mac")) {
             libExtension = "dylib";
+            platform = "darwin-" + (arch.contains("aarch64") || arch.contains("arm64") ? "aarch64" : "x86_64");
         } else {
             libExtension = "so";
+            platform = "linux-" + (arch.contains("aarch64") || arch.contains("arm64") ? "aarch64" : "x86_64");
         }
 
+        // Create temp directory for extracted libraries
+        File tempDir = new File(System.getProperty("java.io.tmpdir"), "milvus-storage-native");
+        tempDir.mkdirs();
+
+        // Extract all libraries from the platform directory
+        // This ensures dependencies are available when loading the JNI library
+        extractAllLibraries("/" + platform + "/", tempDir, libExtension);
+
+        // Load the JNI library (dependencies will be found via RPATH)
         String jniLibName = "lib" + JNI_LIBRARY_NAME + "." + libExtension;
-        File jniLib = extractLibraryFromResource("/native/" + jniLibName, jniLibName);
-        if (jniLib == null || !jniLib.exists()) {
-            throw new IOException("Could not find native library in resources: /native/" + jniLibName);
+        File jniLib = new File(tempDir, jniLibName);
+        if (!jniLib.exists()) {
+            throw new IOException("Could not find native library: " + jniLib.getAbsolutePath());
         }
         System.load(jniLib.getAbsolutePath());
     }
 
     /**
+     * Extract all libraries from a resource directory to a temp directory
+     */
+    private static void extractAllLibraries(String resourceDir, File destDir, String libExtension) throws IOException {
+        // List of known libraries to extract (order doesn't matter with RPATH)
+        String[] knownLibs = {
+            "libmilvus-storage-jni", "libmilvus-storage",
+            "libarrow", "libarrow_acero", "libarrow_dataset", "libparquet",
+            "libprotobuf", "libprotoc", "libcurl", "libssl", "libcrypto",
+            "libz", "liblzma", "libzstd", "libglog", "libgflags_nothreads",
+            "libfolly", "libfollybenchmark", "libfolly_exception_counter",
+            "libfolly_exception_tracer", "libfolly_exception_tracer_base", "libfolly_test_util",
+            "libavrocpp", "libboost_context", "libboost_filesystem", "libboost_program_options",
+            "libboost_regex", "libboost_system", "libboost_thread",
+            "libaws-cpp-sdk-core", "libaws-cpp-sdk-s3", "libaws-cpp-sdk-identity-management"
+        };
+
+        for (String libBase : knownLibs) {
+            String libName = libBase + "." + libExtension;
+            String resourcePath = resourceDir + libName;
+            try {
+                extractLibraryFromResource(resourcePath, libName, destDir);
+            } catch (IOException e) {
+                // Library might not exist for this platform, continue
+            }
+        }
+    }
+
+    /**
      * Extract library from JAR resources to a temporary file
      */
-    private static File extractLibraryFromResource(String resourcePath, String libName) throws IOException {
+    private static File extractLibraryFromResource(String resourcePath, String libName, File destDir) throws IOException {
         InputStream resourceStream = NativeLibraryLoader.class.getResourceAsStream(resourcePath);
 
         if (resourceStream == null) {
-            return null;
+            throw new IOException("Resource not found: " + resourcePath);
         }
 
         try {
-            // Create temp directory
-            File tempDir = new File(System.getProperty("java.io.tmpdir"), "milvus-storage-native");
-            tempDir.mkdirs();
-
-            File tempFile = new File(tempDir, libName);
+            File tempFile = new File(destDir, libName);
 
             // Copy resource to temp file
             Files.copy(resourceStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
