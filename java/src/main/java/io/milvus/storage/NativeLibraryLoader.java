@@ -83,7 +83,7 @@ public class NativeLibraryLoader {
      * Extract all libraries from a resource directory to a temp directory
      */
     private static void extractAllLibraries(String resourceDir, File destDir, String libExtension) throws IOException {
-        // List of known libraries to extract (order doesn't matter with RPATH)
+        // List of known libraries to extract (base names without extension)
         String[] knownLibs = {
             "libmilvus-storage-jni", "libmilvus-storage",
             "libarrow", "libarrow_acero", "libarrow_dataset", "libparquet",
@@ -96,13 +96,32 @@ public class NativeLibraryLoader {
             "libaws-cpp-sdk-core", "libaws-cpp-sdk-s3", "libaws-cpp-sdk-identity-management"
         };
 
+        // Version suffixes for libraries that have versioned symlinks
+        String[] versionSuffixes = {"", ".1700", ".1700.0.0", ".1.82.0", ".3", ".32", ".3.21.4.0",
+            ".0.58.0-dev", ".0.6.0", ".1", ".1.11.3", ".4", ".4.8.0", ".5", ".5.4.0", ".5.5", ".1.2.13"};
+
         for (String libBase : knownLibs) {
+            // Extract base library
             String libName = libBase + "." + libExtension;
             String resourcePath = resourceDir + libName;
             try {
                 extractLibraryFromResource(resourcePath, libName, destDir);
             } catch (IOException e) {
                 // Library might not exist for this platform, continue
+            }
+
+            // Extract versioned variants (for Linux .so libraries)
+            if (libExtension.equals("so")) {
+                for (String suffix : versionSuffixes) {
+                    if (suffix.isEmpty()) continue;
+                    String versionedName = libBase + "." + libExtension + suffix;
+                    String versionedPath = resourceDir + versionedName;
+                    try {
+                        extractLibraryFromResource(versionedPath, versionedName, destDir);
+                    } catch (IOException e) {
+                        // Versioned library might not exist, continue
+                    }
+                }
             }
         }
     }
