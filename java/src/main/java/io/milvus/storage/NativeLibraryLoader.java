@@ -1,7 +1,11 @@
 package io.milvus.storage;
 
 import java.io.*;
+import java.net.*;
 import java.nio.file.*;
+import java.util.*;
+import java.util.jar.*;
+import java.net.URISyntaxException;
 
 /**
  * Native library loader that extracts and loads native libraries from JAR resources.
@@ -80,47 +84,57 @@ public class NativeLibraryLoader {
     }
 
     /**
-     * Extract all libraries from a resource directory to a temp directory
+     * Extract all libraries from a resource directory to a temp directory.
+     * Dynamically discovers all files in the JAR's platform directory.
      */
     private static void extractAllLibraries(String resourceDir, File destDir, String libExtension) throws IOException {
-        // List of known libraries to extract (base names without extension)
-        String[] knownLibs = {
-            "libmilvus-storage-jni", "libmilvus-storage",
-            "libarrow", "libarrow_acero", "libarrow_dataset", "libparquet",
-            "libprotobuf", "libprotoc", "libcurl", "libssl", "libcrypto",
-            "libz", "liblzma", "libzstd", "libglog", "libgflags_nothreads",
-            "libfolly", "libfollybenchmark", "libfolly_exception_counter",
-            "libfolly_exception_tracer", "libfolly_exception_tracer_base", "libfolly_test_util",
-            "libavrocpp", "libboost_context", "libboost_filesystem", "libboost_program_options",
-            "libboost_regex", "libboost_system", "libboost_thread",
-            "libaws-cpp-sdk-core", "libaws-cpp-sdk-s3", "libaws-cpp-sdk-identity-management"
-        };
+        // Get the JAR file containing this class
+        URL classUrl = NativeLibraryLoader.class.getResource("/" + NativeLibraryLoader.class.getName().replace('.', '/') + ".class");
+        if (classUrl == null) {
+            throw new IOException("Cannot find class resource");
+        }
 
-        // Version suffixes for libraries that have versioned symlinks
-        String[] versionSuffixes = {"", ".1700", ".1700.0.0", ".1.82.0", ".3", ".32", ".3.21.4.0",
-            ".0.58.0-dev", ".0.6.0", ".1", ".1.11.3", ".4", ".4.8.0", ".5", ".5.4.0", ".5.5", ".1.2.13"};
+        String protocol = classUrl.getProtocol();
+        // Remove leading slash from resourceDir for JAR entry matching
+        String dirPath = resourceDir.startsWith("/") ? resourceDir.substring(1) : resourceDir;
 
-        for (String libBase : knownLibs) {
-            // Extract base library
-            String libName = libBase + "." + libExtension;
-            String resourcePath = resourceDir + libName;
-            try {
-                extractLibraryFromResource(resourcePath, libName, destDir);
-            } catch (IOException e) {
-                // Library might not exist for this platform, continue
-            }
-
-            // Extract versioned variants (for Linux .so libraries)
-            if (libExtension.equals("so")) {
-                for (String suffix : versionSuffixes) {
-                    if (suffix.isEmpty()) continue;
-                    String versionedName = libBase + "." + libExtension + suffix;
-                    String versionedPath = resourceDir + versionedName;
-                    try {
-                        extractLibraryFromResource(versionedPath, versionedName, destDir);
-                    } catch (IOException e) {
-                        // Versioned library might not exist, continue
+        if ("jar".equals(protocol)) {
+            // Running from JAR - enumerate all entries
+            String jarPath = classUrl.getPath().substring(5, classUrl.getPath().indexOf("!"));
+            try (JarFile jar = new JarFile(URLDecoder.decode(jarPath, "UTF-8"))) {
+                Enumeration<JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    JarEntry entry = entries.nextElement();
+                    String name = entry.getName();
+                    // Check if entry is in our platform directory and is a library file
+                    if (name.startsWith(dirPath) && !entry.isDirectory()) {
+                        String fileName = name.substring(dirPath.length());
+                        if (fileName.contains("." + libExtension)) {
+                            try {
+                                extractLibraryFromResource("/" + name, fileName, destDir);
+                            } catch (IOException e) {
+                                // Continue on extraction failure
+                            }
+                        }
                     }
+                }
+            }
+        } else {
+            // Running from file system (e.g., during development)
+            URL dirUrl = NativeLibraryLoader.class.getResource(resourceDir);
+            if (dirUrl != null && "file".equals(dirUrl.getProtocol())) {
+                try {
+                    File dir = new File(dirUrl.toURI());
+                    if (dir.isDirectory()) {
+                        for (File file : dir.listFiles()) {
+                            if (file.getName().contains("." + libExtension)) {
+                                Files.copy(file.toPath(), new File(destDir, file.getName()).toPath(),
+                                    StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        }
+                    }
+                } catch (URISyntaxException e) {
+                    throw new IOException("Invalid URI: " + dirUrl, e);
                 }
             }
         }
